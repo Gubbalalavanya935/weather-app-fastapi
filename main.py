@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import requests
+import os
 
 app = FastAPI()
 
@@ -12,11 +13,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Templates
 templates = Jinja2Templates(directory="templates")
 
-# 🔑 Your WeatherAPI key
-API_KEY = "your_api_key_here"
+# 🔐 Get API key from environment (Render)
+API_KEY = os.getenv("API_KEY")
 
 
-# Home
+# Home Page
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     return templates.TemplateResponse(
@@ -26,13 +27,22 @@ def home(request: Request):
     )
 
 
-# Search Weather (7-day forecast)
+# 🔍 Search Weather (7-day forecast)
 @app.post("/", response_class=HTMLResponse)
 def get_weather(request: Request, city: str = Form(...)):
     try:
-        url = f"http://api.weatherapi.com/v1/forecast.json?key={API_KEY}&q={city}&days=7"
-        data = requests.get(url).json()
+        if not API_KEY:
+            return templates.TemplateResponse(
+                request,
+                "index.html",
+                context={"weather": {"error": "API key not configured on server"}}
+            )
 
+        url = f"http://api.weatherapi.com/v1/forecast.json?key={API_KEY}&q={city}&days=7"
+        response = requests.get(url)
+        data = response.json()
+
+        # ❌ API error handling
         if "error" in data:
             return templates.TemplateResponse(
                 request,
@@ -67,7 +77,7 @@ def get_weather(request: Request, city: str = Form(...)):
         )
 
     except Exception as e:
-        print(e)
+        print("ERROR:", e)
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -75,34 +85,50 @@ def get_weather(request: Request, city: str = Form(...)):
         )
 
 
-# Location Weather
+# 📍 Location Weather
 @app.get("/location", response_class=HTMLResponse)
 def location(request: Request, lat: float, lon: float):
-    url = f"http://api.weatherapi.com/v1/forecast.json?key={API_KEY}&q={lat},{lon}&days=7"
-    data = requests.get(url).json()
+    try:
+        if not API_KEY:
+            return templates.TemplateResponse(
+                request,
+                "index.html",
+                context={"weather": {"error": "API key not configured"}}
+            )
 
-    current = data["current"]
+        url = f"http://api.weatherapi.com/v1/forecast.json?key={API_KEY}&q={lat},{lon}&days=7"
+        data = requests.get(url).json()
 
-    forecast = []
-    for day in data["forecast"]["forecastday"]:
-        forecast.append({
-            "date": day["date"],
-            "temp": day["day"]["avgtemp_c"],
-            "condition": day["day"]["condition"]["text"],
-            "icon": day["day"]["condition"]["icon"]
-        })
+        current = data["current"]
 
-    weather = {
-        "city": data["location"]["name"],
-        "temp": current["temp_c"],
-        "humidity": current["humidity"],
-        "desc": current["condition"]["text"],
-        "icon": current["condition"]["icon"],
-        "forecast": forecast
-    }
+        forecast = []
+        for day in data["forecast"]["forecastday"]:
+            forecast.append({
+                "date": day["date"],
+                "temp": day["day"]["avgtemp_c"],
+                "condition": day["day"]["condition"]["text"],
+                "icon": day["day"]["condition"]["icon"]
+            })
 
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        context={"weather": weather}
-    )
+        weather = {
+            "city": data["location"]["name"],
+            "temp": current["temp_c"],
+            "humidity": current["humidity"],
+            "desc": current["condition"]["text"],
+            "icon": current["condition"]["icon"],
+            "forecast": forecast
+        }
+
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            context={"weather": weather}
+        )
+
+    except Exception as e:
+        print("ERROR:", e)
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            context={"weather": {"error": "Location fetch failed"}}
+        )
