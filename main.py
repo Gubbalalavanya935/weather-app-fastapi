@@ -13,7 +13,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # 🔑 Your WeatherAPI key
-API_KEY = "0601121927054981b4663044262603"
+API_KEY = "your_api_key_here"
 
 
 # Home
